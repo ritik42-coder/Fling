@@ -1,0 +1,54 @@
+name: Build Fling APK
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip the uploaded project
+        run: |
+          set -e
+          if ls *.zip >/dev/null 2>&1; then
+            Z=$(ls *.zip | head -n1)
+            mkdir -p _proj
+            unzip -q -o "$Z" -d _proj
+            S=$(find _proj -name settings.gradle | head -n1)
+            echo "PROJ=$(dirname "$S")" >> "$GITHUB_ENV"
+          else
+            echo "PROJ=." >> "$GITHUB_ENV"
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        run: |
+          cd "$PROJ"
+          gradle assembleRelease --no-daemon --stacktrace
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/Fling.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fling-apk
+          path: Fling.apk
+
+      - name: Publish to Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Fling build ${{ github.run_number }}
+          files: Fling.apk
